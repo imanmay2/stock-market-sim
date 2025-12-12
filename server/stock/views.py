@@ -1,78 +1,40 @@
 import sqlmodel as sql
 from os import environ
 from fastapi import APIRouter, HTTPException, status, Depends, WebSocket, WebSocketDisconnect
-router = APIRouter()
 
 import uuid
 from . import models, forms
 from user import models as user_models
 from .stock import StockProvider, Event
-from .execute import execute_buy, execute_sell, exit_trade
+from . import logic
 import middleware
 
 from data.db import get_session
-from data.conn import SocketPool
+from data.socket_pool import SocketPool
 from data.cache import Cache
 
 
-PROVIDER = StockProvider(5000, 2, 10)
+router = APIRouter()
+POOL = SocketPool()
+PROVIDER = StockProvider(2, 10, POOL)
 
 
-def check_admin(data: forms.AdminForm): return data.username == environ['ADMIN_USER'] and data.password == environ['ADMIN_PASSWORD']
-
-
-@router.get('/stocks')
-def get_stocks(
-    session: sql.Session = Depends(get_session),
-    user: user_models.User = Depends(middleware.get_user)
-):
+@router.get('/')
+def get_stocks(session: sql.Session = Depends(get_session)):
+    res: dict[str, dict] = {}
     rows = session.exec(
         sql.select(models.StockEntry, models.Stock)
            .join(models.Stock)
            .order_by(models.StockEntry.timestamp)  # type: ignore
     )
-    res: dict[str, dict] = {}
+
     for entry, stock in rows:
         stock_id = entry.stock_id.hex
 
         if stock_id not in res:
-            owned = session.exec(
-                sql.select(sql.func.coalesce(sql.func.sum(user_models.Transaction.num_units), 0))
-                  .where(
-                      user_models.Transaction.stock == stock.uid,
-                      user_models.Transaction.user == user.uid
-                  )
-            ).one()
-
-            long_holding = session.exec(
-                sql.select(user_models.Holding).where(
-                    user_models.Holding.stock == stock.uid,
-                    user_models.Holding.user == user.uid,
-                    user_models.Holding.trade_type == "long"
-                )
-            ).first()
-
-            short_holding = session.exec(
-                sql.select(user_models.Holding).where(
-                    user_models.Holding.stock == stock.uid,
-                    user_models.Holding.user == user.uid,
-                    user_models.Holding.trade_type == "short"
-                )
-            ).first()
-
             res[stock_id] = {
                 'name': stock.name,
-                'category': stock.category,
                 'entries': [],
-                'owned': owned or 0,
-                'long': {
-                    'units': long_holding.quantity if long_holding else 0,
-                    'entry_price': long_holding.entry_price if long_holding else 0.0
-                },
-                'short': {
-                    'units': short_holding.quantity if short_holding else 0,
-                    'entry_price': short_holding.entry_price if short_holding else 0.0
-                }
             }
 
         res[stock_id]['entries'].append(entry.to_dict())
@@ -88,70 +50,61 @@ def get_stocks(
     return res
 
 
-@router.websocket('/stocks')
+@router.websocket('/')
 async def connect_websocket(websocket: WebSocket):
     try:
         await websocket.accept()
-        SocketPool.add(websocket)
+        POOL.add(websocket)
         while True:
             await websocket.receive_text()
 
     except WebSocketDisconnect:
-        SocketPool.remove(websocket)
+        POOL.remove(websocket)
 
 
-@router.post('/stocks/{stock_id}')
+@router.post('/transact/{stock_id}')
 def transact(
     stock_id: str, data: forms.TransactForm, session: sql.Session = Depends(get_session),
     user: user_models.User = Depends(middleware.get_user)
 ):
-    try:
-        stock = session.exec(sql.select(models.Stock).where(models.Stock.uid == uuid.UUID(stock_id))).one()
-    except:
+    if not user.verified:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Account not verified")
+    
+    stock = session.exec(sql.select(models.Stock).where(models.Stock.uid == uuid.UUID(stock_id))).one_or_none()
+    if stock is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Stock ID not found")
     
-    units = abs(data.units)
+    holding = session.exec(
+        sql.select(user_models.Holding)
+        .where(user_models.Holding.user == user.uid, user_models.Holding.stock == stock.uid)
+    ).one_or_none()
 
-    try:
-        if data.units < 0:
-            return execute_sell(session, user, stock, units)
-        else:
-            return execute_buy(session, user, stock, units)
-        
-    except ValueError as e:
-        raise HTTPException(status.HTTP_412_PRECONDITION_FAILED, detail=str(e))
-
-
-# Exit route - Use this for direct exit of that stock position(s). i.e. delete entire stock holding
-
-@router.post('/stocks/{stock_id}/exit')
-def exit_position(
-    stock_id: str, data: forms.ExitForm, session: sql.Session = Depends(get_session),
-    user: user_models.User = Depends(middleware.get_user)
-):
-    try:
-        stock = session.exec(sql.select(models.Stock).where(models.Stock.uid == uuid.UUID(stock_id))).one()
-    except:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Stock ID not found")
     
-    try:
-        return exit_trade(session, user, stock, data.trade_type)
-    except ValueError as e:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(e))
+    if data.units == 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Units cannot be zero")
+    
+    res: dict[str, bool | str] = {}
+    if data.units < 0: res = logic.sell_stock(user, stock, abs(data.units), session, holding)
+    else: res = logic.buy_stock(user, stock, data.units, session, holding)
+
+    if not res['valid']:
+        raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, detail=res)
+    
+    return res
 
 
-@router.post('/stocks')
-def start_stock(data: forms.AdminForm):
-    if not check_admin(data): raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid admin credentials')
+@router.post('/')
+def start_stock(_: None = Depends(middleware.check_admin)):
+    global PROVIDER
     if PROVIDER.started.is_set(): return HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, detail='Stock provider is already initialized')
     
+    PROVIDER = StockProvider(2, 10, POOL)
     PROVIDER.start()
     return "Stock provider initialized"
 
 
-@router.delete('/stocks')
-def stop_stock(data: forms.AdminForm):
-    if not check_admin(data): raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid admin credentials')
+@router.delete('/')
+def stop_stock(_: None = Depends(middleware.check_admin)):
     if not PROVIDER.started.is_set(): return HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, detail="Stock provider is not running!")
 
     PROVIDER.started.clear()
@@ -159,9 +112,8 @@ def stop_stock(data: forms.AdminForm):
     return "Stock provider stopped"
 
 
-@router.post('/stocks/events/')
-def trigger_pattern(data: forms.StockEventForm):
-    if not check_admin(data): raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid admin credentials')
+@router.post('/events')
+def trigger_pattern(data: forms.StockEventForm, _: None = Depends(middleware.check_admin)):
     if not PROVIDER.started.is_set(): raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, detail="Stock provider is not running!")
 
     for event in data.events:
