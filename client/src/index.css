@@ -24,9 +24,18 @@ html, body {
 nav {
     inset: 0 0 auto 0;
     position: fixed;
-    backdrop-filter: blur(20px);
-    height: 3rem;
+    background: black;
+    height: 5rem;
     z-index: 999;
+}
+
+nav a {
+    color: #ddd;
+    transition: color 0.2s ease-in-out;
+}
+
+nav a:hover {
+    color: white
 }
 
 main {

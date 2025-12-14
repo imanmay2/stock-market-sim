@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { Stock as StockType, StockEntry } from "../../types"
 import { parse_entry } from "./logic"
 import { makeRequest, SERVER_HOST } from "../../lib/utils"
@@ -9,6 +9,7 @@ const Page = () => {
   const [entries, setEntries] = useState<Record<string, StockEntry[]>>()
   const [curr, setCurr] = useState("")
 
+  const mounted = useRef(true)
 
   useEffect(() => {
     makeRequest('stocks', 'GET')
@@ -32,9 +33,12 @@ const Page = () => {
       })
       return res
     })
-    socket.onclose = () => { if (socket.readyState === WebSocket.CLOSED) alert("Connection interrupted! Please refresh!") }
+    socket.onclose = () => { if (mounted.current && socket.readyState === WebSocket.CLOSED) alert("Connection interrupted! Please refresh!") }
 
-    return () => { if (socket.readyState === WebSocket.OPEN) socket.close() }
+    return () => {
+      mounted.current = false
+      if (socket.readyState === WebSocket.OPEN) socket.close()
+    }
   }, [])
 
   return (

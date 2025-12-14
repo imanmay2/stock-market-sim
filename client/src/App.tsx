@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAuthStore, useUserStore } from './lib/store'
 import { makeRequest, SERVER_HOST, showMessage } from './lib/utils'
-import { createBrowserRouter, RouterProvider } from 'react-router'
+import { NavLink, BrowserRouter, Routes, Route } from 'react-router'
 
 import Stock from './pages/stock/page'
 import Portfolio from './pages/portfolio/page'
@@ -32,25 +32,44 @@ const App = () => {
 
 	return (
 		<>
-			<Navbar />
 			<div id="toast" className="py-3 px-5 absolute transition right-[25px] w-[300px] rounded z-[99999]"></div>
-			<main>
-				<RouterProvider router={createBrowserRouter([
-					{ path: "/stocks/", Component: Stock },
-					{ path: "/portfolio/", Component: Portfolio },
-					{ path: "/transactions/", Component: TransactionPage },
-					{ path: '/leaderboard/', Component: Leaderboard },
-					{ path: "/", Component: HomePage}
-				])} />
-			</main>
+
+			<BrowserRouter>
+				<Navbar />
+				<main>
+					<Routes>
+						<Route path="/stocks" element={<Stock />} />
+						{/* <Route path="/portfolio" element={<Portfolio />} /> */}
+						<Route path="/transactions" element={<TransactionPage />} />
+						<Route path="/leaderboard" element={<Leaderboard />} />
+						<Route path="/" element={<HomePage />} />
+					</Routes>
+				</main>
+			</BrowserRouter>
 		</>
 	)
 }
 
 const Navbar = () => {
-	return (
-		<nav>
+	const logged = useAuthStore(state => state.logged)
 
+	return (
+		<nav className='flex justify-between px-10 md:px-24 items-center'>
+			<NavLink to="/">
+				<img src="/favicon/android-chrome-192x192.png" width={50} height={50} alt="" />
+			</NavLink>
+
+			<div className="inline-flex gap-5">
+				<NavLink to="/">Home</NavLink>
+				{!logged ? <></> :
+					<>
+						<NavLink to="/stocks">Stocks</NavLink>
+						{/* <NavLink to="/portfolio">Portfolio</NavLink> */}
+						<NavLink to="/transactions">Transactions</NavLink>
+					</>
+				}
+				<NavLink to="/leaderboard">Leaderboard</NavLink>
+			</div>
 		</nav>
 	)
 }
