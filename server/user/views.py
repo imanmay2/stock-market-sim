@@ -78,4 +78,4 @@ def get_transactions(
             "price": transaction.price,
         })
     
-    return res
+    return { "transactions": res }
