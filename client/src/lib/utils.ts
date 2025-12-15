@@ -4,10 +4,10 @@ export const makeRequest = async(
     path: string,
     method: RequestInit['method'],
     data?: Record<string, unknown>,
-    includeAuth: boolean = true
+    includeAuth: boolean = false
 ) => {
     const token = localStorage.getItem('token')
-    if (includeAuth && !token) return;
+    if (includeAuth && !token) return { "detail": { "message": "You are not logged in" } };
 
     const res = await fetch(`https://${SERVER_HOST}/${path}`, {
         method: method,
@@ -18,7 +18,7 @@ export const makeRequest = async(
         ...(data ? { body: JSON.stringify(data) } : {})
     })
 
-    return await res.json()
+    return (await res.json()) ?? { "detail": { "message": "Request failed" } }
 }
 
 

@@ -28,7 +28,8 @@ const Login = ({ onSwitch }: LoginProps) => {
       localStorage.setItem("token", token);
       window.location.href = "/stocks";
       
-    } catch {
+    } catch (err) {
+      console.log(err)
       showMessage("An unexpected error occurred. Please try again", true);
     } finally {
       setLoading(false);
