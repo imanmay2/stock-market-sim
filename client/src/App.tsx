@@ -43,7 +43,7 @@ const App = () => {
 
 	return (
 		<>
-			<div id="toast" className="text-white py-3 px-5 absolute transition right-[25px] w-[300px] rounded z-[99999]"></div>
+			<div id="toast" className="text-white py-3 px-5 fixed transition right-[25px] w-[300px] rounded z-[99999]"></div>
 
 			<BrowserRouter>
 				<Navbar />
