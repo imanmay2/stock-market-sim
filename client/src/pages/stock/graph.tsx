@@ -240,3 +240,4 @@ const PRICE_STYLE: DeepPartial<AreaSeriesOptions> = {
 };
 
 export default Graph;
+
