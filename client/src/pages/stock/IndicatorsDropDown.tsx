@@ -1,5 +1,3 @@
-
-
 import { useState, useRef, useEffect } from "react";
 
 const indicators: Record<string, string> = {
@@ -8,41 +6,31 @@ const indicators: Record<string, string> = {
   DEMA: "Double Exponential Moving Average",
   TEMA: "Triple Exponential Moving Average",
   RMA: "Running Moving Average",
-  TRIX: "Triple Exponential Oscillator",
   MMAX: "Moving Maximum",
 
+  PSAR: "Parabolic SAR",
+  TYP: "Typical Price",
+  VWMA: "Volume Weighted Moving Average",
+  VWAP: "Volume Weighted Average Price",
+
+  TRIX: "Triple Exponential Oscillator",
   APO: "Absolute Price Oscillator",
-  ARRON: "Aroon Indicator",
   BOP: "Balance of Power",
   CCI: "Commodity Channel Index",
   MI: "Mass Index",
-  MACD: "Moving Average Convergence Divergence",
-  PSAR: "Parabolic SAR",
 
   QSTICK: "QStick Indicator",
-  KDJ: "KDJ Oscillator",
-  TYP: "Typical Price",
-  VWMA: "Volume Weighted Moving Average",
 
-  VORTEX: "Vortex Indicator",
   AO: "Awesome Oscillator",
   CMO: "Chande Momentum Oscillator",
-  ICHIMOKU: "Ichimoku Cloud",
   PPO: "Percentage Price Oscillator",
   PVO: "Percentage Volume Oscillator",
-
   ROC: "Rate of Change",
   RSI: "Relative Strength Index",
-  STOCH: "Stochastic Oscillator",
+
   AB: "Acceleration Bands",
   ATR: "Average True Range",
-  BB: "Bollinger Bands",
   BBW: "Bollinger Bands Width",
-  CE: "Chandelier Exit",
-
-  DC: "Donchian Channels",
-  KC: "Keltner Channel",
-  PO: "Projection Oscillator",
   TR: "True Range",
   UI: "Ulcer Index",
 
@@ -54,7 +42,6 @@ const indicators: Record<string, string> = {
   NVI: "Negative Volume Index",
   OBV: "On Balance Volume",
   VPT: "Volume Price Trend",
-  VWAP: "Volume Weighted Average Price",
 };
 
 type Props = {
@@ -119,7 +106,7 @@ const IndicatorsDropdown = ({ onSelect }: Props) => {
               key={key}
               onClick={() => {
                 setSelected(key);
-                onSelect(key); // internal value unchanged
+                onSelect(key);
                 setIsOpen(false);
               }}
               className="px-3 py-2 text-sm hover:bg-[#0b123a] cursor-pointer"
